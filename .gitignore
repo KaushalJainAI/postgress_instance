@@ -1,0 +1,29 @@
+# Environment files
+.env
+!.env.example
+
+# Data volumes
+pgdata/
+data/
+
+# Backups (can be large)
+backups/*.sql
+backups/*.gz
+backups/*.dump
+
+# Logs
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Terraform state (if used later)
+*.tfstate
+*.tfstate.backup
+.terraform/

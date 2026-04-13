@@ -1,0 +1,91 @@
+# ============================================================
+# Docker Compose — PostgreSQL Server for EC2
+# ============================================================
+# Usage:
+#   docker compose up -d          # Start in background
+#   docker compose down           # Stop
+#   docker compose logs -f db     # Tail logs
+# ============================================================
+
+services:
+  # ---- PostgreSQL Database ----
+  db:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: postgres-server
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-app_db}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # Persistent data volume
+      - pgdata:/var/lib/postgresql/data
+      # Backup mount point
+      - ./backups:/backups
+    shm_size: ${PG_SHARED_MEMORY:-256m}
+    networks:
+      - pg-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-app_db}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # ---- PgAdmin Web UI (Optional) ----
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin
+    restart: unless-stopped
+    profiles:
+      - admin   # Only starts with: docker compose --profile admin up -d
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:?Set PGADMIN_PASSWORD in .env}
+      PGADMIN_LISTEN_PORT: 80
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - pg-network
+
+  # ---- Prometheus Exporter (Optional) ----
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: postgres-exporter
+    restart: unless-stopped
+    profiles:
+      - monitoring   # Only starts with: docker compose --profile monitoring up -d
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-app_db}?sslmode=disable"
+    ports:
+      - "${EXPORTER_PORT:-9187}:9187"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - pg-network
+
+volumes:
+  pgdata:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+networks:
+  pg-network:
+    driver: bridge
