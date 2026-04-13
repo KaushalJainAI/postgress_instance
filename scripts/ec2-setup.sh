@@ -79,6 +79,29 @@ fi
 echo ">>> Docker version: $(docker --version)"
 echo ">>> Docker Compose version: $(docker compose version)"
 
+# --- Kernel tuning for PostgreSQL ---
+echo ">>> Applying kernel optimizations for PostgreSQL..."
+cat > /etc/sysctl.d/30-postgresql.conf << 'EOF'
+# Reduce swappiness — prefer keeping DB pages in RAM
+vm.swappiness = 1
+
+# Dirty page writeback tuning for write-heavy workloads
+vm.dirty_ratio = 40
+vm.dirty_background_ratio = 10
+
+# Increase max open file handles
+fs.file-max = 262144
+
+# Allocate huge pages for PostgreSQL shared_buffers (~1GB / 2MB per page + margin)
+vm.nr_hugepages = 550
+
+# Network tuning for remote database connections
+net.core.somaxconn = 4096
+net.ipv4.tcp_max_syn_backlog = 4096
+EOF
+sysctl -p /etc/sysctl.d/30-postgresql.conf
+echo ">>> Kernel parameters applied."
+
 # --- Create required directories ---
 echo ">>> Creating backup directory..."
 mkdir -p backups

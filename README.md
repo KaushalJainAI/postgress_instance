@@ -79,7 +79,17 @@ docker compose ps
 
 ## 🔌 Connecting From Your Projects
 
-Use this connection string in any of your applications:
+### Via PgBouncer (Recommended — Connection Pooling)
+
+Connect through PgBouncer on port **6432** for connection pooling. This reuses database connections, drastically reducing memory usage under load.
+
+```
+postgresql://<POSTGRES_USER>:<POSTGRES_PASSWORD>@<EC2_PUBLIC_IP>:6432/<DATABASE_NAME>
+```
+
+### Direct Connection (Bypass Pooler)
+
+For admin tasks or when you need session-level features (e.g., `LISTEN/NOTIFY`, temp tables):
 
 ```
 postgresql://<POSTGRES_USER>:<POSTGRES_PASSWORD>@<EC2_PUBLIC_IP>:5432/<DATABASE_NAME>
@@ -98,7 +108,8 @@ postgresql://<POSTGRES_USER>:<POSTGRES_PASSWORD>@<EC2_PUBLIC_IP>:5432/<DATABASE_
 
 ```python
 from sqlalchemy import create_engine
-engine = create_engine("postgresql://my_project_user:password@ec2-ip:5432/my_project")
+# Use port 6432 for connection pooling via PgBouncer
+engine = create_engine("postgresql://my_project_user:password@ec2-ip:6432/my_project")
 ```
 
 ### Example: Node.js (pg)
@@ -106,7 +117,8 @@ engine = create_engine("postgresql://my_project_user:password@ec2-ip:5432/my_pro
 ```javascript
 const { Pool } = require('pg');
 const pool = new Pool({
-  connectionString: 'postgresql://my_project_user:password@ec2-ip:5432/my_project'
+  // Use port 6432 for connection pooling via PgBouncer
+  connectionString: 'postgresql://my_project_user:password@ec2-ip:6432/my_project'
 });
 ```
 
@@ -140,14 +152,19 @@ openssl req -new -x509 -days 365 -nodes \
 
 ## 💾 Backup & Restore
 
+Backups use **parallel directory-format dumps** for faster backup and restore.
+
 ```bash
-# Manual backup
+# Manual backup (parallel, compressed)
 ./scripts/backup.sh
 
 # Backup a specific database
 ./scripts/backup.sh my_project_db
 
-# Restore from backup
+# Restore from backup (parallel restore)
+./scripts/restore.sh backups/app_db_20260413_020000
+
+# Legacy .sql.gz backups are also supported
 ./scripts/restore.sh backups/app_db_20260413_020000.sql.gz
 
 # Automate daily backups via cron
@@ -191,6 +208,37 @@ After editing `config/postgresql.conf`, restart:
 
 ```bash
 docker compose restart db
+```
+
+---
+
+## ⚡ Performance Monitoring
+
+### Query Statistics (pg_stat_statements)
+
+`pg_stat_statements` is pre-configured to track all query performance. Use it to find slow queries:
+
+```sql
+-- Top 10 slowest queries by total execution time
+SELECT query, calls, total_exec_time, mean_exec_time, rows
+FROM pg_stat_statements
+ORDER BY total_exec_time DESC
+LIMIT 10;
+
+-- Reset stats (do this periodically)
+SELECT pg_stat_statements_reset();
+```
+
+### Connection Pool Stats (PgBouncer)
+
+```bash
+# Connect to PgBouncer admin console
+docker compose exec pgbouncer psql -p 5432 -U admin pgbouncer
+
+# Show pool stats
+SHOW POOLS;
+SHOW STATS;
+SHOW CLIENTS;
 ```
 
 ---

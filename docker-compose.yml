@@ -41,6 +41,44 @@ services:
       options:
         max-size: "10m"
         max-file: "5"
+    # --- Resource limits (prevents OOM kills on small instances) ---
+    deploy:
+      resources:
+        limits:
+          memory: ${PG_MEMORY_LIMIT:-3.5G}
+        reservations:
+          memory: ${PG_MEMORY_RESERVATION:-2G}
+    oom_score_adj: -1000   # Protect PostgreSQL from OOM killer
+
+  # ---- PgBouncer Connection Pooler ----
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    container_name: pgbouncer
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: "postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-app_db}"
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 500
+      DEFAULT_POOL_SIZE: 20
+      MIN_POOL_SIZE: 5
+      RESERVE_POOL_SIZE: 5
+      RESERVE_POOL_TIMEOUT: 3
+      SERVER_LIFETIME: 3600
+      SERVER_IDLE_TIMEOUT: 600
+      SERVER_CONNECT_TIMEOUT: 15
+      AUTH_TYPE: scram-sha-256
+    ports:
+      - "${PGBOUNCER_PORT:-6432}:5432"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - pg-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
 
   # ---- PgAdmin Web UI (Optional) ----
   pgadmin:
@@ -89,3 +127,4 @@ volumes:
 networks:
   pg-network:
     driver: bridge
+

@@ -2,20 +2,25 @@
 # ============================================================
 # PostgreSQL Restore Script
 # ============================================================
-# Restores a database from a compressed backup file.
+# Restores a database from a backup (directory or .sql.gz).
+# Supports parallel restore for directory-format backups.
 #
 # Usage:
-#   ./scripts/restore.sh backups/app_db_20260413_020000.sql.gz
-#   ./scripts/restore.sh backups/app_db_20260413_020000.sql.gz my_other_db
+#   ./scripts/restore.sh backups/app_db_20260413_020000           # Directory format (parallel)
+#   ./scripts/restore.sh backups/app_db_20260413_020000.sql.gz    # Legacy gzip format
+#   ./scripts/restore.sh backups/app_db_20260413_020000 my_db     # Specify target DB
 # ============================================================
 
 set -euo pipefail
 
 if [ $# -lt 1 ]; then
-    echo "Usage: $0 <backup_file.sql.gz> [database_name]"
+    echo "Usage: $0 <backup_path> [database_name]"
     echo ""
     echo "Available backups:"
-    ls -lh backups/*.sql.gz 2>/dev/null || echo "  No backups found."
+    ls -1d backups/*/ 2>/dev/null | sed 's|/$||' || true
+    ls -1 backups/*.sql.gz 2>/dev/null || true
+    echo ""
+    [ -z "$(ls -A backups/ 2>/dev/null)" ] && echo "  No backups found."
     exit 1
 fi
 
@@ -24,11 +29,13 @@ if [ -f .env ]; then
     export $(grep -v '^#' .env | xargs)
 fi
 
-BACKUP_FILE="$1"
+BACKUP_PATH="$1"
 DB_NAME="${2:-${POSTGRES_DB:-app_db}}"
+PARALLEL_JOBS="${BACKUP_PARALLEL_JOBS:-2}"
 
-if [ ! -f "${BACKUP_FILE}" ]; then
-    echo "ERROR: Backup file not found: ${BACKUP_FILE}"
+# Validate backup exists
+if [ ! -e "${BACKUP_PATH}" ]; then
+    echo "ERROR: Backup not found: ${BACKUP_PATH}"
     exit 1
 fi
 
@@ -43,7 +50,7 @@ if [[ "${CONFIRM}" != "y" && "${CONFIRM}" != "Y" ]]; then
     exit 0
 fi
 
-echo "[$(date)] Starting restore of ${DB_NAME} from ${BACKUP_FILE}..."
+echo "[$(date)] Starting restore of ${DB_NAME} from ${BACKUP_PATH}..."
 
 # --- Drop and recreate database ---
 docker compose exec -T db psql \
@@ -62,10 +69,29 @@ docker compose exec -T db psql \
     -d postgres \
     -c "CREATE DATABASE ${DB_NAME} OWNER ${POSTGRES_USER:-admin};"
 
-# --- Restore from backup ---
-gunzip -c "${BACKUP_FILE}" | docker compose exec -T db psql \
-    -U "${POSTGRES_USER:-admin}" \
-    -d "${DB_NAME}" \
-    --quiet
+# --- Restore from backup (auto-detect format) ---
+if [ -d "${BACKUP_PATH}" ]; then
+    # Directory format — use pg_restore with parallel jobs
+    echo "[$(date)] Detected directory-format backup, restoring with ${PARALLEL_JOBS} parallel jobs..."
+    docker compose exec -T db pg_restore \
+        -U "${POSTGRES_USER:-admin}" \
+        -d "${DB_NAME}" \
+        --jobs="${PARALLEL_JOBS}" \
+        --no-owner \
+        --no-privileges \
+        "/backups/$(basename ${BACKUP_PATH})"
+elif [[ "${BACKUP_PATH}" == *.sql.gz ]]; then
+    # Legacy gzip format — pipe through psql
+    echo "[$(date)] Detected legacy .sql.gz backup, restoring via psql..."
+    gunzip -c "${BACKUP_PATH}" | docker compose exec -T db psql \
+        -U "${POSTGRES_USER:-admin}" \
+        -d "${DB_NAME}" \
+        --quiet
+else
+    echo "ERROR: Unrecognized backup format: ${BACKUP_PATH}"
+    echo "Expected a directory or a .sql.gz file."
+    exit 1
+fi
 
 echo "[$(date)] Restore complete."
+
