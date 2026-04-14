@@ -238,6 +238,40 @@ openssl req -new -x509 -days 365 -nodes \
 
 ---
 
+## 🚚 Data Migration (Importing an existing DB)
+
+### From AWS RDS (or another PostgreSQL host)
+
+If you need to clone an entire existing PostgreSQL database into this new environment, we've provided a script to handle it smoothly.
+
+1. Ensure you have the remote database URI (e.g. `postgresql://user:pass@host:5432/db`)
+2. Edit `scripts/migrate-postgres.sh` to include your `SOURCE_URI`.
+3. Copy the script to your EC2 instance:
+```bash
+scp -i "my-key.pem" scripts/migrate-postgres.sh ec2-user@<EC2_IP>:~/
+```
+4. Run the script on EC2:
+```bash
+bash ~/migrate-postgres.sh
+```
+
+### From Local SQLite (.sqlite3) via Django
+
+If you are graduating from a local SQLite file to this PostgreSQL server, Django provides built-in tools to bridge the formatting differences. Run these from your local backend code terminal:
+
+1. **Dump existing SQLite data:**
+```bash
+python manage.py dumpdata > backupdata.json
+```
+2. Update your `settings.py` or `.env` backend config so `DATABASE_URL` connects to this new EC2 Server.
+3. **Restore into PostgreSQL:**
+```bash
+python manage.py migrate
+python manage.py loaddata backupdata.json
+```
+
+---
+
 ## 💾 Backup & Restore
 
 Backups use **parallel directory-format dumps** for faster backup and restore.
