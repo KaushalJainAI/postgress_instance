@@ -62,27 +62,41 @@ bash scripts/build-and-push.sh v1.0
 
 This pushes to: `kaushaljainai/postgres-ec2:latest`
 
-### Step 2: Deploy on EC2 (one command!)
+### Step 2: Prepare Production Environment (On EC2)
+
+Connect to your EC2 instance and ensure Docker is installed.
 
 ```bash
 # SSH into your EC2 instance
 ssh -i your-key.pem ec2-user@<EC2_PUBLIC_IP>
 
-# Run the deploy script (installs Docker + pulls image + creates config)
-curl -sSL https://raw.githubusercontent.com/KaushalJainAI/postgres-ec2/main/scripts/ec2-deploy.sh | sudo bash
-
-# Or copy the script manually and run:
-sudo bash ec2-deploy.sh
+# Create deployment directory
+mkdir -p ~/postgres-server
+cd ~/postgres-server
 ```
 
-### Step 3: Configure & Start
+*(If Docker isn't installed on your EC2 instance yet, install it using the steps provided in the standard install guide for Amazon Linux).*
+
+### Step 3: Copy Configuration to EC2
+
+From your local machine (in a new terminal), copy the configured `.env` and the modified Docker Hub configuration to your EC2 instance:
 
 ```bash
-# Edit credentials
-sudo nano /opt/postgres-server/.env
+# Copy your configured .env file
+scp -i your-key.pem .env ec2-user@<EC2_PUBLIC_IP>:~/postgres-server/.env
 
+# Copy the hub-specific docker compose file
+scp -i your-key.pem docker-compose.hub.yml ec2-user@<EC2_PUBLIC_IP>:~/postgres-server/docker-compose.yml
+```
+
+### Step 4: Configure & Start
+
+SSH back into your EC2 instance, navigate to the directory, and start the containers.
+
+```bash
 # Start everything
-cd /opt/postgres-server
+cd ~/postgres-server
+sudo docker compose pull
 sudo docker compose up -d
 
 # Verify
@@ -98,7 +112,7 @@ When you make changes to the Dockerfile or config:
 bash scripts/build-and-push.sh v1.1
 
 # On EC2: pull the new image & restart
-cd /opt/postgres-server
+cd ~/postgres-server
 sudo docker compose pull
 sudo docker compose up -d
 ```

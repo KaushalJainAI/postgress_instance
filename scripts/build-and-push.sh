@@ -30,37 +30,25 @@ echo "  Platform: linux/amd64 (for EC2)"
 echo "============================================"
 echo ""
 
-# --- Step 1: Build for linux/amd64 ---
-echo ">>> Building image for linux/amd64..."
-docker build --platform linux/amd64 -t "${FULL_IMAGE}" .
-
-# Also tag as latest if a version tag was provided
-if [ "${TAG}" != "latest" ]; then
-    echo ">>> Also tagging as latest..."
-    docker tag "${FULL_IMAGE}" "${DOCKER_HUB_USER}/${IMAGE_NAME}:latest"
-fi
-
-echo ""
-echo ">>> Build complete. Image size:"
-docker images "${DOCKER_HUB_USER}/${IMAGE_NAME}" --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
-
-# --- Step 2: Push to Docker Hub ---
-echo ""
-echo ">>> Pushing to Docker Hub..."
-docker push "${FULL_IMAGE}"
+# --- Step 1 & 2: Build with Buildx and Push ---
+echo ">>> Building and pushing image for linux/amd64..."
+# Ensure buildx builder exists and is used
+docker buildx create --name mybuilder --use 2>/dev/null || docker buildx use mybuilder
 
 if [ "${TAG}" != "latest" ]; then
-    docker push "${DOCKER_HUB_USER}/${IMAGE_NAME}:latest"
+    docker buildx build --platform linux/amd64 --push -t "${FULL_IMAGE}" -t "${DOCKER_HUB_USER}/${IMAGE_NAME}:latest" .
+else
+    docker buildx build --platform linux/amd64 --push -t "${FULL_IMAGE}" .
 fi
 
 echo ""
 echo "============================================"
-echo "  ✅ Push Complete!"
+echo "  ✅ Build & Push Complete!"
 echo "============================================"
 echo ""
 echo "  Image available at:"
 echo "  https://hub.docker.com/r/${DOCKER_HUB_USER}/${IMAGE_NAME}"
 echo ""
 echo "  Pull on EC2 with:"
-echo "  docker pull ${FULL_IMAGE}"
+echo "  docker-compose -f docker-compose.hub.yml pull"
 echo ""
