@@ -20,8 +20,8 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     CREATE EXTENSION IF NOT EXISTS "pg_trgm";
     CREATE EXTENSION IF NOT EXISTS "unaccent";
 
-    -- JSON utilities
-    CREATE EXTENSION IF NOT EXISTS "jsonb_plperl" CASCADE;
+    -- Case-insensitive text (useful for emails, usernames, etc.)
+    CREATE EXTENSION IF NOT EXISTS "citext";
 
     -- Statistics & monitoring
     CREATE EXTENSION IF NOT EXISTS "pg_stat_statements";

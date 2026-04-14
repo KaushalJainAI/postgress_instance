@@ -2,25 +2,26 @@
 # General-Purpose PostgreSQL Container for EC2
 # ============================================================
 # Built on the official PostgreSQL 16 Alpine image for
-# a minimal footprint. Includes common extensions and
-# utilities pre-installed.
+# a minimal footprint. Optimized for Amazon Linux 2023 on
+# c7i-flex.large (2 vCPU Intel Xeon, 4 GB RAM, x86_64).
 # ============================================================
 
-FROM postgres:16-alpine
+# Explicitly target x86_64 (amd64) to match c7i-flex Intel architecture
+FROM --platform=linux/amd64 postgres:16-alpine
 
 LABEL maintainer="your-email@example.com"
-LABEL description="General-purpose PostgreSQL server for EC2 deployment"
-LABEL version="1.0"
+LABEL description="General-purpose PostgreSQL server for EC2 (c7i-flex.large)"
+LABEL version="1.1"
 
-# ---- Install useful extensions & utilities ----
+# ---- Install useful utilities ----
+# NOTE: aws-cli is NOT available in Alpine apk repos.
+# Install via pip if you need S3 backups, or use the host's AWS CLI instead.
 RUN apk add --no-cache \
-    # For health checks and scripting
     curl \
     bash \
-    # For backups to S3 (optional)
-    aws-cli \
-    # For timezone support
-    tzdata
+    py3-pip \
+    tzdata && \
+    pip3 install --no-cache-dir --break-system-packages awscli
 
 # ---- Copy custom PostgreSQL configuration ----
 COPY config/postgresql.conf /etc/postgresql/postgresql.conf

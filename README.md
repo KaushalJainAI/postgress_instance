@@ -9,7 +9,8 @@ A production-ready, Dockerized PostgreSQL 16 server designed to run on an EC2 in
 ```
 .
 ├── Dockerfile                    # Custom PostgreSQL 16 Alpine image
-├── docker-compose.yml            # Orchestration (DB + optional PgAdmin + Exporter)
+├── docker-compose.yml            # Orchestration (local build)
+├── docker-compose.hub.yml        # Orchestration (pull from Docker Hub)
 ├── .env.example                  # Environment variable template
 ├── config/
 │   ├── postgresql.conf           # Tuned server configuration
@@ -19,7 +20,9 @@ A production-ready, Dockerized PostgreSQL 16 server designed to run on an EC2 in
 │   ├── 02-roles.sh               # Create reusable app roles
 │   └── 03-functions.sql          # Utility functions (auto-timestamps, short IDs)
 ├── scripts/
-│   ├── ec2-setup.sh              # One-command EC2 bootstrap
+│   ├── build-and-push.sh         # Build image & push to Docker Hub
+│   ├── ec2-deploy.sh             # One-command EC2 deploy (pulls from Hub)
+│   ├── ec2-setup.sh              # EC2 bootstrap (git clone method)
 │   ├── backup.sh                 # Compressed backup with retention
 │   ├── restore.sh                # Interactive restore from backup
 │   ├── create-project-db.sh      # Spin up a new project database
@@ -33,12 +36,81 @@ A production-ready, Dockerized PostgreSQL 16 server designed to run on an EC2 in
 
 ### 1. Launch an EC2 Instance
 
-- **Recommended**: `t3.medium` (2 vCPU, 4 GB RAM) or larger
-- **OS**: Amazon Linux 2023 or Ubuntu 22.04+
+- **Instance Type**: `c7i-flex.large` (2 vCPU Intel Xeon, 4 GB RAM)
+- **OS**: Amazon Linux 2023
 - **Storage**: 20+ GB EBS (gp3 recommended)
-- **Security Group**: Open port `5432` to your application IPs only
+- **Security Group**: Open port `5432` (PostgreSQL) and `6432` (PgBouncer) to your application IPs only
 
-### 2. Clone & Bootstrap
+---
+
+## 🐳 Deployment Method: Docker Hub (Recommended)
+
+Build the image on your local machine, push to Docker Hub, then pull on EC2. **No need to clone the repo on EC2!**
+
+### Step 1: Build & Push (on your local machine)
+
+```bash
+# Login to Docker Hub
+docker login
+
+# Build and push the image
+bash scripts/build-and-push.sh
+
+# Or push with a version tag
+bash scripts/build-and-push.sh v1.0
+```
+
+This pushes to: `kaushaljainai/postgres-ec2:latest`
+
+### Step 2: Deploy on EC2 (one command!)
+
+```bash
+# SSH into your EC2 instance
+ssh -i your-key.pem ec2-user@<EC2_PUBLIC_IP>
+
+# Run the deploy script (installs Docker + pulls image + creates config)
+curl -sSL https://raw.githubusercontent.com/KaushalJainAI/postgres-ec2/main/scripts/ec2-deploy.sh | sudo bash
+
+# Or copy the script manually and run:
+sudo bash ec2-deploy.sh
+```
+
+### Step 3: Configure & Start
+
+```bash
+# Edit credentials
+sudo nano /opt/postgres-server/.env
+
+# Start everything
+cd /opt/postgres-server
+sudo docker compose up -d
+
+# Verify
+sudo docker compose ps
+```
+
+### Updating the Image
+
+When you make changes to the Dockerfile or config:
+
+```bash
+# On your local machine: rebuild & push
+bash scripts/build-and-push.sh v1.1
+
+# On EC2: pull the new image & restart
+cd /opt/postgres-server
+sudo docker compose pull
+sudo docker compose up -d
+```
+
+---
+
+## 📦 Alternative: Git Clone Method
+
+<details>
+<summary>Click to expand (if you prefer cloning the repo on EC2)</summary>
+
+### Clone & Bootstrap
 
 ```bash
 # SSH into your EC2 instance
@@ -52,7 +124,7 @@ cd postgres-server
 sudo ./scripts/ec2-setup.sh
 ```
 
-### 3. Configure
+### Configure
 
 ```bash
 # Edit the environment file
@@ -64,16 +136,18 @@ nano .env
 # POSTGRES_DB=app_db
 ```
 
-### 4. Start the Server
+### Start the Server
 
 ```bash
-# Start PostgreSQL
+# Start PostgreSQL (builds locally)
 docker compose up -d
 
 # Verify it's running
 docker compose ps
 ./scripts/health-check.sh
 ```
+
+</details>
 
 ---
 

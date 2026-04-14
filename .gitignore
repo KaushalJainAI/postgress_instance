@@ -27,3 +27,5 @@ Thumbs.db
 *.tfstate
 *.tfstate.backup
 .terraform/
+
+*.pem

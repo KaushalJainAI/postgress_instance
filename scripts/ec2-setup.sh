@@ -29,9 +29,15 @@ echo ">>> Detected OS: $OS"
 
 # --- Install Docker ---
 install_docker_amazon_linux() {
-    echo ">>> Installing Docker on Amazon Linux..."
+    echo ">>> Installing Docker on Amazon Linux 2023..."
     dnf update -y
-    dnf install -y docker
+    dnf install -y docker git
+    # Install Docker Compose plugin
+    mkdir -p /usr/local/lib/docker/cli-plugins
+    DOCKER_COMPOSE_VERSION=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep tag_name | cut -d '"' -f 4)
+    curl -SL "https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-linux-x86_64" \
+        -o /usr/local/lib/docker/cli-plugins/docker-compose
+    chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
     systemctl start docker
     systemctl enable docker
     usermod -aG docker ec2-user
