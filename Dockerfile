@@ -7,7 +7,7 @@
 # ============================================================
 
 # Explicitly target x86_64 (amd64) to match c7i-flex Intel architecture
-FROM --platform=linux/amd64 postgres:16-alpine
+FROM --platform=linux/amd64 postgres:17-alpine
 
 LABEL maintainer="your-email@example.com"
 LABEL description="General-purpose PostgreSQL server for EC2 (c7i-flex.large)"

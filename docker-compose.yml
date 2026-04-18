@@ -10,9 +10,7 @@
 services:
   # ---- PostgreSQL Database ----
   db:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: postgres:17-alpine
     container_name: postgres-server
     restart: unless-stopped
     env_file: .env
@@ -27,7 +25,13 @@ services:
       - pgdata:/var/lib/postgresql/data
       # Backup mount point
       - ./backups:/backups
+      # Custom Configuration
+      - ./config/postgresql.conf:/etc/postgresql/postgresql.conf
+      - ./config/pg_hba.conf:/etc/postgresql/pg_hba.conf
+      # Initialization scripts
+      - ./init-scripts:/docker-entrypoint-initdb.d
     shm_size: ${PG_SHARED_MEMORY:-256m}
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf", "-c", "hba_file=/etc/postgresql/pg_hba.conf"]
     networks:
       - pg-network
     healthcheck:

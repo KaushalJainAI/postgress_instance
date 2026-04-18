@@ -1,5 +1,7 @@
 # Environment files
 .env
+ngu.env
+.env.migration
 !.env.example
 
 # Data volumes
